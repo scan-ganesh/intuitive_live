@@ -1,0 +1,9 @@
+algo strategy details
+it is an intraday trading strategy
+
+the API will be called every 15 minutes, starting from 9:30am. 
+- authentication should happen only once
+- get the historical data
+- this is an intraday strategy, no new positions after 2:30pm, close all open positions by 3:15pm
+- entry rule: if the candle's body size is between 22 and 49, you will make an entry in the opening of the next candle. for the open of the spot candle, you will create a new buy position of the appropriate option type. the reference candle is green, you will buy the ATM call option, if red, Put option.
+- exit rule: 10% of the premium appreciation is the target
