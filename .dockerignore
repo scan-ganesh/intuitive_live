@@ -1,0 +1,12 @@
+__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+__init__.py
+.env
+.DS_Store
+gcloud-commands
+.venv/**
+.git/**
+.gitignore
+uv.lock

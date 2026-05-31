@@ -1,0 +1,39 @@
+1. gcloud builds submit --tag gcr.io/icewater/nifty-job
+2. gcloud run jobs execute nifty-straddle-job
+
+
+gcloud run jobs update nifty-straddle-job --image gcr.io/icewater/nifty-job --region asia-south1 --memory 1Gi --cpu 1
+gcloud run jobs update nifty-straddle-job --set-secrets=BREEZE_API_KEY=projects/icewater/secrets/BREEZE_API_KEY:latest
+
+
+gcloud run jobs update nifty-straddle-job \
+  --region asia-south1 \
+  --set-env-vars BREEZE_API_KEY=5J79450S2247q1357)88L25943413Y99  \
+  --set-env-vars BREEZE_API_SECRET=873O85FL426!072138#91X&5I60xV5q9 \
+  --set-env-vars BREEZE_API_SESSION=55758632
+
+
+gcloud run jobs update nifty-straddle-job \
+  --region asia-south1 \
+  --set-secrets=BREEZE_API_KEY=BREEZE_APP_KEY:latest \
+  --set-secrets=BREEZE_API_SECRET=BREEZE_APP_SECRET:latest \
+  --set-secrets=BREEZE_API_SESSION=BREEZE_API_SESSION:latest \
+  --set-secrets=TELEGRAM_URL=TELEGRAM_URL:latest \
+  --set-secrets=TELEGRAM_CHAT_ID=TELEGRAM_CHAT_ID:latest \
+  --set-secrets=TELEGRAM_FROM=TELEGRAM_FROM:latest \
+  --set-secrets=TELEGRAM_TO=TELEGRAM_TO:latest
+
+gcloud projects add-iam-policy-binding 795383211266 \
+  --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding BREEZE_APP_KEY \
+  --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+gcloud secrets add-iam-policy-binding BREEZE_APP_SECRET \
+  --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+gcloud secrets add-iam-policy-binding BREEZE_API_SESSION \
+  --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
