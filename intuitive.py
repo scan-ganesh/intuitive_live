@@ -115,8 +115,8 @@ def square_off_all_positions():
 
 def place_long_option_order(payload):
     """Place long call or put order"""
-    kite_client = ku.get_kite_client()
-    return kite_client.place_order(payload)
+
+    return ku.place_order(payload)
     
 
 def get_option_premium(strike, expiry_date, right, timestamp=None):
@@ -160,17 +160,14 @@ def main_live():
         # Take the first one (assuming only one active at a time)
         active_position = positions[0]
 
-    entry_cutoff = time(14, 30)
+    entry_cutoff = time(15, 00)
     exit_cutoff = time(15, 15)
 
     # ====================== 1. MANAGE ACTIVE POSITION ======================
 
     if active_position:
-        right = active_position.get("right", "").lower()
-        strike = int(active_position.get("strike_price"))
-        expiry = active_position.get("expiry_date")
-        
-        current_premium = get_option_premium(strike, expiry, right)
+
+        current_premium = active_position.get("last_price")  # Get current premium from the position data
         if current_premium is None:
             print("Could not fetch current premium. Skipping management.")
             return
@@ -180,7 +177,7 @@ def main_live():
 
         # Target 10%
         if entry_price > 0 and (current_premium - entry_price) / entry_price >= 0.10:
-            print(f"EXIT (TARGET 10%) | Premium: {current_premium:.2f}")
+            send_telegram_message(f"EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f} -{current_premium:.2f}")
             square_off_all_positions()
             return
 
@@ -195,11 +192,11 @@ def main_live():
             big_candle_low = candle_reference_data.get("low")
             # If the signal is 'below' and spot goes below the big candle's low, we exit. If the signal is 'above' and spot goes above the big candle's high, we exit.
             if stop_loss_signal == "below" and current_spot < big_candle_low:
-                print(f"EXIT (STOP LOSS) | Premium: {current_premium:.2f} | Spot: {current_spot:.2f} below Big Candle Low: {big_candle_low:.2f}")
+                send_telegram_message(f"EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
                 square_off_all_positions()
                 return
             elif stop_loss_signal == "above" and current_spot > big_candle_high:
-                print(f"EXIT (STOP LOSS) | Premium: {current_premium:.2f} | Spot: {current_spot:.2f} above Big Candle High: {big_candle_high:.2f}")
+                send_telegram_message(f"EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
                 square_off_all_positions()
                 return
             
@@ -207,17 +204,17 @@ def main_live():
 
         # EOD Exit
         if current_time >= exit_cutoff:
-            print(f"EXIT (EOD) @ {current_time} | Premium: {current_premium:.2f}")
+            send_telegram_message(f"EXIT (EOD) @ {current_time} | P&L: {current_premium-entry_price:.2f}")
             square_off_all_positions()
             return
 
-        print(f"Holding {right.upper()} position. Premium: {current_premium:.2f}")
+        print(f"Holding the position. {active_position.get('tradingsymbol', 'Unknown')}: {current_premium:.2f}")
         return
 
     # ====================== 2. ENTRY LOGIC (No Position) ======================
     if current_time >= entry_cutoff:
         print("After entry cutoff. No new entries.")
-        #return
+        return
 
 
 
@@ -248,7 +245,7 @@ def main_live():
             "right": right,
             "quantity": 1,  # This will be multiplied by lot size in the order function
         }
-        
+
         success = place_long_option_order(payload)
 
         if success:

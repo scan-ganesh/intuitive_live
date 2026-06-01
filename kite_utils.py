@@ -32,14 +32,14 @@ def store_candle_reference_data(candle_data):
     """Store candle data in Firestore for reference"""
     # document name should be today's date in yyyy-mm-dd format
 
-    doc_name = datetime.now().strftime("%Y-%m-%d")
+    doc_name = datetime.datetime.now().strftime("%Y-%m-%d")
     db = firestore.Client()
     doc_ref = db.collection("candle_reference").document(doc_name)
     doc_ref.set(candle_data)
 
 def retrieve_candle_reference_data():
     """Retrieve candle reference data from Firestore"""
-    doc_name = datetime.now().strftime("%Y-%m-%d")
+    doc_name = datetime.datetime.now().strftime("%Y-%m-%d")
     db = firestore.Client()
     doc_ref = db.collection("candle_reference").document(doc_name)
     try:
@@ -99,27 +99,33 @@ def get_strategy_positions(underlying_symbol="NIFTY"):
     if not positions:
         return []
     # we will filter data.day that contains the positions for the day. Filter by tradingsymbol that starts with the underlying symbol (e.g., "NIFTY") and ends with "CE" or "PE" 
-    filtered_positions = [pos for pos in positions if pos.get("tradingsymbol", "").startswith(underlying_symbol) and (pos.get("tradingsymbol", "").endswith("CE") or pos.get("tradingsymbol", "").endswith("PE"))]
+    filtered_positions = [pos for pos in positions if pos.get("quantity") > 0 and pos.get("tradingsymbol", "").startswith(underlying_symbol) and (pos.get("tradingsymbol", "").endswith("CE") or pos.get("tradingsymbol", "").endswith("PE"))]
     
     return filtered_positions
 
+def format_zerodha_weekly_expiry(e_date: datetime) -> str:
+    # Get 2-digit year (e.g., '26') and 2-digit day (e.g., '15')
+    yy = e_date.strftime('%y')
+    dd = e_date.strftime('%d')
+    
+    # JavaScript getMonth() >= 9 covers October (10), November (11), December (12)
+    if e_date.month >= 10:
+        # Map 2-digit months to Zerodha's weekly codes (O, N, D)
+        month_map = {10: 'O', 11: 'N', 12: 'D'}
+        m = month_map[e_date.month]
+    else:
+        # January to September remain single digits (1 to 9)
+        m = str(e_date.month)
+        
+    return f"{yy}{m}{dd}"
 
 # method that calculates the trading symbol for the given underlying, strike, right and expiry. Formula for the same will be Weekly- Index/Stock Name +Year of Expiry(numerical) +Month of expiry(numerical) + Day of expiry(numerical) + Strike and Option type(or FUT for futures) Regex- (?:(.*?)(\d{2}[A-Za-z0-9_]{1}\d{3})(.*)){1,1}. Expiry date will be a string yyyy-mm-dd. While formatting the date use yyMdd for the months which are in single digits and yyMMMMMdd for two digit months, Exanple 26523 for 23rd of May 2026. 26OCT23 for 23rd of October 2026. 
 
-def calculate_trading_symbol(underlying, strike, right, expiry_date):
-    expiry_dt = pd.to_datetime(expiry_date)
-    year = expiry_dt.year % 100  # Get last two digits of the year
-    month = expiry_dt.month
-    day = expiry_dt.day
+def calculate_trading_symbol(underlying, strike, right):
+    expiry_date = get_next_expiry_date(datetime.date.today().strftime("%Y-%m-%d"))   
+    expiry_dt = format_zerodha_weekly_expiry(pd.to_datetime(expiry_date))
 
-    if month < 10:
-        month_str = f"{month}"
-        date_str = f"{year}{month_str}{day}"
-    else:
-        month_str = expiry_dt.strftime("%b").upper()  # Get abbreviated month name in uppercase
-        date_str = f"{year}{month_str}{day}"
-
-    trading_symbol = f"{underlying}{date_str}{strike}{right.upper()}"
+    trading_symbol = f"{underlying}{expiry_dt}{strike}{right.upper()}"
     return trading_symbol
 
 def place_order(payload):
@@ -127,17 +133,19 @@ def place_order(payload):
     if not kite_client:
         print("Failed to initialize KiteConnect client.")
         return None
-    
+    tradingsymbol=calculate_trading_symbol(payload["underlying"], payload["strike_price"], payload["right"])
+    print(f"Placing order for {tradingsymbol} with quantity {payload['quantity']} and transaction type {payload['transaction_type']}")
     try:
         order_id = kite_client.place_order(
             variety=payload.get("variety", kite_client.VARIETY_REGULAR),
             exchange=payload["exchange_code"],
-            tradingsymbol=calculate_trading_symbol(payload["underlying"], payload["strike_price"], payload["right"], payload["expiry_date"]),
+            tradingsymbol=tradingsymbol,
             transaction_type=payload["transaction_type"],
             quantity=calculate_LOTS(payload["underlying"]) * payload["quantity"],
             product=payload.get("product", kite_client.PRODUCT_MIS),  # Default to MIS if not specified
             order_type=payload.get("order_type", kite_client.ORDER_TYPE_MARKET),  # Default to market order
-            validity=payload.get("validity", kite_client.VALIDITY_DAY)  # Default to day validity
+            validity=payload.get("validity", kite_client.VALIDITY_DAY),  # Default to day validity
+            market_protection=1
         )
         return order_id
     except Exception as e:
@@ -174,7 +182,8 @@ def square_off_strategy_positions():
                 quantity=action_qty,
                 product=pos["product"], # Must match the original product (e.g., MIS, NRML, CNC)
                 order_type=kite_client.ORDER_TYPE_MARKET, # Market order ensures instant exit
-                validity=kite_client.VALIDITY_DAY
+                validity=kite_client.VALIDITY_DAY,
+                market_protection=1
             )
             print(f"Squared off {pos['tradingsymbol']} | Order ID: {order_id}")
 
@@ -191,7 +200,7 @@ def get_next_expiry_date(date):
         df = pd.read_csv("expiry_dates.csv")
         df["expiry_date"] = pd.to_datetime(df["expiry_date"])
         date_dt = pd.to_datetime(date)
-        mask = df["expiry_date"] >= date_dt
+        mask = df["expiry_date"] > date_dt
         if not mask.any():
             next_expiry = None
         else:
@@ -203,7 +212,5 @@ def get_next_expiry_date(date):
         return None
 
 if __name__ == "__main__":
-    result = calculate_trading_symbol("NIFTY", 17500, "CE", "2026-05-23")
+    result = calculate_trading_symbol("NIFTY", 23500, "CE")
     print(result)
-    result1 = calculate_trading_symbol("NIFTY", 17500, "CE", "2026-10-23")
-    print(result1)
