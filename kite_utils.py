@@ -133,7 +133,7 @@ def place_order(payload):
             variety=payload.get("variety", kite_client.VARIETY_REGULAR),
             exchange=payload["exchange_code"],
             tradingsymbol=calculate_trading_symbol(payload["underlying"], payload["strike_price"], payload["right"], payload["expiry_date"]),
-            transaction_type=payload["transaction_type"].upper(),
+            transaction_type=payload["transaction_type"],
             quantity=calculate_LOTS(payload["underlying"]) * payload["quantity"],
             product=payload.get("product", kite_client.PRODUCT_MIS),  # Default to MIS if not specified
             order_type=payload.get("order_type", kite_client.ORDER_TYPE_MARKET),  # Default to market order

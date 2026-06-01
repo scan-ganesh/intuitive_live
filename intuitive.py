@@ -243,6 +243,7 @@ def main_live():
         payload = {
             "underlying": "NIFTY",
             "exchange_code": kite_client.EXCHANGE_NFO,
+            "transaction_type": kite_client.TRANSACTION_TYPE_BUY,
             "strike_price": atm_strike,
             "right": right,
             "quantity": 1,  # This will be multiplied by lot size in the order function
