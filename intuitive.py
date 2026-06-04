@@ -20,20 +20,47 @@ BIG_CANDLE_MAX = float(os.getenv("BIG_CANDLE_MAX", "30"))
 TELEGRAM_PROVIDER = os.getenv("TELEGRAM_URL")
 
 
-def send_telegram_message(message):
-    telegram = {
-        "from": os.getenv("TELEGRAM_FROM"),
-        "to": os.getenv("TELEGRAM_TO"),
-        "message": message
+import requests
+from urllib.parse import quote
+import os
+
+def send_telegram_message(message: str, parse_mode: str = None):
+    """
+    Send message to Telegram with proper encoding and better handling.
+    """
+    bot_token = os.getenv("TELEGRAM_FROM")      # Usually your bot token
+    chat_id = os.getenv("TELEGRAM_TO")
+    
+    if not bot_token or not chat_id:
+        print("Error: TELEGRAM_FROM or TELEGRAM_TO environment variable not set.")
+        return False
+
+    base_url = f"{TELEGRAM_PROVIDER}{bot_token}/sendMessage"
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "disable_web_page_preview": True
     }
-    telegram_url = f"{TELEGRAM_PROVIDER}{telegram['from']}/sendMessage?chat_id={telegram['to']}&text={telegram['message']}"
+    
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
 
     try:
-        response = requests.get(telegram_url)
-        response.raise_for_status() 
+        response = requests.get(base_url, params=payload, timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("ok"):
+            return True
+        else:
+            print(f"Telegram API Error: {result}")
+            return False
+            
     except requests.RequestException as err:
-        print(f"Error sending the telegram message: {telegram['message']}", err)
-
+        print(f"Error sending Telegram message: {err}")
+        print(f"Message was: {message[:200]}...")  # Truncated for log
+        return False
 
 def get_nifty_quote():
     """Get current NIFTY spot price"""
