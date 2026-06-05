@@ -199,12 +199,12 @@ def main_live():
             print("Could not fetch current premium. Skipping management.")
             return
 
-        entry_price = float(active_position.get("average_price", 0))  # or track entry price separately
+        entry_price = float(active_position.get("buy_price", 0))  # or track entry price separately
 
 
         # Target 10%
         if entry_price > 0 and (current_premium - entry_price) / entry_price >= 0.10:
-            send_telegram_message(f"EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f} -{current_premium:.2f}")
+            send_telegram_message(f"EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f}")
             square_off_all_positions()
             return
 
