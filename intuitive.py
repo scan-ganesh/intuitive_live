@@ -146,29 +146,6 @@ def place_long_option_order(payload):
     return ku.place_order(payload)
     
 
-def get_option_premium(strike, expiry_date, right, timestamp=None):
-    """Get current option premium"""
-    if timestamp is None:
-        timestamp = datetime.now(IST)
-    
-    payload = {
-        "interval": "5minute",
-        "stock_code": "NIFTY",
-        "exchange_code": "NFO",
-        "product_type": "options",
-        "strike_price": strike,
-        "expiry_date": pd.to_datetime(expiry_date).isoformat(),
-        "from_date": timestamp.isoformat(),
-        "to_date": (timestamp + timedelta(minutes=5)).isoformat(),
-        "right": right.lower()
-    }
-    try:
-        data = bu.get_prices(payload, type='historical')
-        if data and len(data) > 0:
-            return float(data[0]["close"])
-    except Exception as e:
-        print(f"Error fetching option premium: {e}")
-    return None
 
 def main_live():
     kite_client = ku.get_kite_client()
@@ -266,7 +243,6 @@ def main_live():
         atm_strike = calculate_atm(current_spot)
         payload = {
             "underlying": "NIFTY",
-            "exchange_code": kite_client.EXCHANGE_NFO,
             "transaction_type": kite_client.TRANSACTION_TYPE_BUY,
             "strike_price": atm_strike,
             "right": right,

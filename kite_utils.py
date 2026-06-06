@@ -6,8 +6,8 @@ import pandas as pd
 import os
 
 load_dotenv()
-# Cache for expiry
-expiry_cache = {}
+# Cache for symbol information
+syminfo_cache = {}
 
 customer_cache = None
 
@@ -85,13 +85,6 @@ def get_positions():
         print(f"Error fetching positions from KiteConnect: {e}")
         return []
 
-def calculate_LOTS(underlying):
-    """Calculate lot size based on underlying"""
-    LOTS = {
-        "NIFTY": 65,
-        "BANKNIFTY": 25
-    }
-    return LOTS.get(underlying, 0)
 
 def get_strategy_positions(underlying_symbol="NIFTY"):
     
@@ -126,6 +119,8 @@ def calculate_trading_symbol(underlying, strike, right):
     expiry_date_v2 = get_next_expiry_date_v2(datetime.date.today().strftime("%Y-%m-%d"), underlying)
     expiry_dt = format_zerodha_weekly_expiry(pd.to_datetime(expiry_date_v2))
 
+    print(f"Calculated expiry date for {underlying} is {expiry_date_v2} and formatted expiry is {expiry_dt}")
+
     trading_symbol = f"{underlying}{expiry_dt}{strike}{right.upper()}"
     return trading_symbol
 
@@ -139,10 +134,10 @@ def place_order(payload):
     try:
         order_id = kite_client.place_order(
             variety=payload.get("variety", kite_client.VARIETY_REGULAR),
-            exchange=payload["exchange_code"],
+            exchange=get_exchange(payload["underlying"]),
             tradingsymbol=tradingsymbol,
             transaction_type=payload["transaction_type"],
-            quantity=calculate_LOTS(payload["underlying"]) * payload["quantity"],
+            quantity=get_lot_size(payload["underlying"]) * payload["quantity"],
             product=payload.get("product", kite_client.PRODUCT_MIS),  # Default to MIS if not specified
             order_type=payload.get("order_type", kite_client.ORDER_TYPE_MARKET),  # Default to market order
             validity=payload.get("validity", kite_client.VALIDITY_DAY),  # Default to day validity
@@ -192,12 +187,14 @@ def square_off_strategy_positions():
         print(f"Error executing square off: {e}")
 
 
-def get_next_expiry_date_v2(date, underlying):
-    db = firestore.Client()
-
-    print(f"Fetching expiry data from Firestore for underlying: {underlying}")
-    collection_ref = db.collection('references/COMMON/EXPIRYDATES')
+def _get_underlying_reference_data(underlying):
+    """Helper: Fetch and cache reference data for an underlying (lot_size, exchange, options expiries)"""
+    if underlying in syminfo_cache:
+        print(f"Using cached reference data for {underlying}")
+        return syminfo_cache[underlying]
     
+    db = firestore.Client()
+    collection_ref = db.collection('references/COMMON/EXPIRYDATES')
     doc_ref = collection_ref.document(underlying)
     doc_snapshot = doc_ref.get()
     
@@ -207,22 +204,49 @@ def get_next_expiry_date_v2(date, underlying):
 
     data = doc_snapshot.to_dict()
     
-    # Get options expiries to find the absolute next available date
-    all_expiries = sorted(list( data.get('options', [])))
+    cached_data = {
+        'lot_size': data.get('lot_size', 0),
+        'exchange': data.get('exchange', ''),
+        'options': sorted(list(data.get('options', [])))
+    }
     
-    # Convert target date string to datetime for robust comparison
+    syminfo_cache[underlying] = cached_data
+    return cached_data
+
+
+def get_lot_size(underlying):
+    """Get lot size for the underlying"""
+    ref_data = _get_underlying_reference_data(underlying)
+    return ref_data['lot_size'] if ref_data else 0
+
+
+def get_exchange(underlying):
+    """Get exchange for the underlying"""
+    ref_data = _get_underlying_reference_data(underlying)
+    return ref_data['exchange'] if ref_data else None
+
+
+def get_next_expiry_date_v2(date, underlying):
+    """Get next expiry date after the given date for the underlying"""
+    ref_data = _get_underlying_reference_data(underlying)
+    if not ref_data:
+        return None
+    
+    all_expiries = ref_data['options']
     date_dt = pd.to_datetime(date)
     
-    next_expiry = None
     for expiry_str in all_expiries:
         if pd.to_datetime(expiry_str) > date_dt:
-            next_expiry = expiry_str
-            break  # The list is already sorted, so the first match is the closest future date
-
-    return next_expiry
+            return expiry_str
+    
+    return None
 
 
 
 if __name__ == "__main__":
-    result = calculate_trading_symbol("NIFTY", 23500, "CE")
-    print(result)
+    print(calculate_trading_symbol("NIFTY", 23500, "CE"))
+    print(calculate_trading_symbol("NIFTY", 23600, "CE"))
+    print(get_lot_size("SENSEX"))
+    print(get_exchange("NIFTY"))
+    print(get_exchange("SENSEX"))
+    
