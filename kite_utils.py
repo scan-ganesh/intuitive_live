@@ -122,8 +122,9 @@ def format_zerodha_weekly_expiry(e_date: datetime) -> str:
 # method that calculates the trading symbol for the given underlying, strike, right and expiry. Formula for the same will be Weekly- Index/Stock Name +Year of Expiry(numerical) +Month of expiry(numerical) + Day of expiry(numerical) + Strike and Option type(or FUT for futures) Regex- (?:(.*?)(\d{2}[A-Za-z0-9_]{1}\d{3})(.*)){1,1}. Expiry date will be a string yyyy-mm-dd. While formatting the date use yyMdd for the months which are in single digits and yyMMMMMdd for two digit months, Exanple 26523 for 23rd of May 2026. 26OCT23 for 23rd of October 2026. 
 
 def calculate_trading_symbol(underlying, strike, right):
-    expiry_date = get_next_expiry_date(datetime.date.today().strftime("%Y-%m-%d"))   
-    expiry_dt = format_zerodha_weekly_expiry(pd.to_datetime(expiry_date))
+
+    expiry_date_v2 = get_next_expiry_date_v2(datetime.date.today().strftime("%Y-%m-%d"), underlying)
+    expiry_dt = format_zerodha_weekly_expiry(pd.to_datetime(expiry_date_v2))
 
     trading_symbol = f"{underlying}{expiry_dt}{strike}{right.upper()}"
     return trading_symbol
@@ -191,25 +192,36 @@ def square_off_strategy_positions():
         print(f"Error executing square off: {e}")
 
 
+def get_next_expiry_date_v2(date, underlying):
+    db = firestore.Client()
 
-def get_next_expiry_date(date):
-    if date in expiry_cache:
-        return expiry_cache[date]
-
-    try:
-        df = pd.read_csv("expiry_dates.csv")
-        df["expiry_date"] = pd.to_datetime(df["expiry_date"])
-        date_dt = pd.to_datetime(date)
-        mask = df["expiry_date"] > date_dt
-        if not mask.any():
-            next_expiry = None
-        else:
-            next_expiry = df.loc[mask, "expiry_date"].min().strftime("%Y-%m-%d")
-        expiry_cache[date] = next_expiry
-        return next_expiry
-    except Exception as e:
-        print(f"Error reading expiry_dates.csv: {e}")
+    print(f"Fetching expiry data from Firestore for underlying: {underlying}")
+    collection_ref = db.collection('references/COMMON/EXPIRYDATES')
+    
+    doc_ref = collection_ref.document(underlying)
+    doc_snapshot = doc_ref.get()
+    
+    if not doc_snapshot.exists:
+        print(f"No expiry data found in Firestore for underlying: {underlying}")
         return None
+
+    data = doc_snapshot.to_dict()
+    
+    # Get options expiries to find the absolute next available date
+    all_expiries = sorted(list( data.get('options', [])))
+    
+    # Convert target date string to datetime for robust comparison
+    date_dt = pd.to_datetime(date)
+    
+    next_expiry = None
+    for expiry_str in all_expiries:
+        if pd.to_datetime(expiry_str) > date_dt:
+            next_expiry = expiry_str
+            break  # The list is already sorted, so the first match is the closest future date
+
+    return next_expiry
+
+
 
 if __name__ == "__main__":
     result = calculate_trading_symbol("NIFTY", 23500, "CE")
