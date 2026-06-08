@@ -28,18 +28,18 @@ def get_customer_data():
     customer_cache = data
     return data
 
-def store_candle_reference_data(candle_data):
+def store_candle_reference_data(candle_data, underlying: str = "NIFTY"):
     """Store candle data in Firestore for reference"""
-    # document name should be today's date in yyyy-mm-dd format
+    # document name should be today's date and underlying in yyyy-mm-dd-UNDERLYING format
 
-    doc_name = datetime.datetime.now().strftime("%Y-%m-%d")
+    doc_name = datetime.datetime.now().strftime("%Y-%m-%d") + f"-{underlying}"
     db = firestore.Client()
     doc_ref = db.collection("candle_reference").document(doc_name)
     doc_ref.set(candle_data)
 
-def retrieve_candle_reference_data():
+def retrieve_candle_reference_data(underlying: str = "NIFTY"):
     """Retrieve candle reference data from Firestore"""
-    doc_name = datetime.datetime.now().strftime("%Y-%m-%d")
+    doc_name = datetime.datetime.now().strftime("%Y-%m-%d") + f"-{underlying}"
     db = firestore.Client()
     doc_ref = db.collection("candle_reference").document(doc_name)
     try:

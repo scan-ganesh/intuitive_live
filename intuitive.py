@@ -1,6 +1,7 @@
 
 import breeze_utils as bu
 import kite_utils as ku
+import strategy_config
 import pandas as pd
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -12,10 +13,6 @@ dotenv.load_dotenv()
 
 
 IST = ZoneInfo("Asia/Kolkata")
-
-# Big candle size thresholds (configurable via .env)
-BIG_CANDLE_MIN = float(os.getenv("BIG_CANDLE_MIN", "12"))
-BIG_CANDLE_MAX = float(os.getenv("BIG_CANDLE_MAX", "30"))
 
 TELEGRAM_PROVIDER = os.getenv("TELEGRAM_URL")
 
@@ -62,33 +59,38 @@ def send_telegram_message(message: str, parse_mode: str = None):
         print(f"Message was: {message[:200]}...")  # Truncated for log
         return False
 
-def get_nifty_quote():
-    """Get current NIFTY spot price"""
+def get_quote(underlying: str):
+    """Get current spot price for the underlying"""
+    cfg = strategy_config.get_config(underlying)
     payload = {
-        "stock_code": "NIFTY",
-        "exchange_code": "NSE",
-        "product_type": "cash"
+        "stock_code": cfg["stock_code"],
+        "exchange_code": cfg["exchange_code"],
+        "product_type": cfg["product_type"]
     }
+    print(f"Fetching current quote for {underlying} with payload: {payload}")
     try:
         data = bu.get_prices(payload, type='quote')
+        print(f"Quote response for {underlying}: {data}")
         if data and len(data) > 0:
-            return float(data[0]["ltp"])
+            # filter based on the exchange code
+            return [filtered for filtered in data if filtered.get("exchange_code") == cfg["exchange_code"]][0].get("ltp")
     except Exception as e:
-        print(f"Error fetching NIFTY quote: {e}")
+        print(f"Error fetching {underlying} quote: {e}")
     return None
 
-def get_nifty_history():
-    """Fetch recent 15min candles to detect big candle pattern"""
+def get_history(underlying: str, interval: str = "5minute"):
+    """Fetch recent candles to detect big candle pattern"""
+    cfg = strategy_config.get_config(underlying)
     now = datetime.now()
     # make from date to 09:00 and the todate to 15:15
     from_date = now.replace(hour=9, minute=0, second=0, microsecond=0).isoformat(timespec='seconds')
     to_date = now.replace(hour=15, minute=15, second=0, microsecond=0).isoformat(timespec='seconds')
 
     payload = {
-        "interval": "5minute",
-        "stock_code": "NIFTY",
-        "exchange_code": "NSE",
-        "product_type": "cash",
+        "interval": interval,
+        "stock_code": cfg["stock_code"],
+        "exchange_code": cfg["exchange_code"],
+        "product_type": cfg["product_type"],
         "from_date": from_date,
         "to_date": to_date
     }
@@ -121,51 +123,54 @@ def get_nifty_history():
             df_15min = df_15min.reset_index()
             return df_15min
     except Exception as e:
-        print(f"Error fetching 15min history: {e}")
+        print(f"Error fetching 15min history for {underlying}: {e}")
     return pd.DataFrame()
 
-def calculate_atm(current_price):
+def calculate_atm(current_price, underlying: str):
+    """Calculate At-The-Money strike based on underlying-specific rounding factor"""
     if current_price is None:
         return None
-    return round(current_price / 50) * 50
+    cfg = strategy_config.get_config(underlying)
+    rounding_factor = cfg["atm_rounding_factor"]
+    return round(current_price / rounding_factor) * rounding_factor
 
 
 
-def get_strategy_positions():
-    """Get current NIFTY options positions"""
-    positions = ku.get_strategy_positions('NIFTY')
+def get_strategy_positions(underlying: str):
+    """Get current options positions for an underlying"""
+    positions = ku.get_strategy_positions(underlying)
     return positions if positions else []
 
-def square_off_all_positions():
-    """Square off all strategy positions"""
+def square_off_all_positions(underlying: str):
+    """Square off all strategy positions for an underlying"""
     ku.square_off_strategy_positions()
 
 def place_long_option_order(payload):
     """Place long call or put order"""
-
     return ku.place_order(payload)
     
 
-
-def main_live():
+    
+def execute_strategy(underlying: str):
+    """Execute the big candle strategy for a given underlying"""
+    cfg = strategy_config.get_config(underlying)
     kite_client = ku.get_kite_client()
     now_ist = datetime.now(IST)
     current_time = now_ist.time()
     today_str = now_ist.strftime("%Y-%m-%d")
-    df = get_nifty_history()
+    df = get_history(underlying)
 
-
-    print(f"\n=== Intuitive Big Candle Strategy Check @ {now_ist} ===")
+    print(f"\n=== {underlying} Big Candle Strategy Check @ {now_ist} ===")
 
     # Get current positions
-    positions = get_strategy_positions()
+    positions = get_strategy_positions(underlying)
     active_position = None
     if positions:
         # Take the first one (assuming only one active at a time)
         active_position = positions[0]
 
-    entry_cutoff = time(15, 00)
-    exit_cutoff = time(15, 15)
+    entry_cutoff = cfg["entry_cutoff"]
+    exit_cutoff = cfg["exit_cutoff"]
 
     # ====================== 1. MANAGE ACTIVE POSITION ======================
 
@@ -173,76 +178,78 @@ def main_live():
 
         current_premium = active_position.get("last_price")  # Get current premium from the position data
         if current_premium is None:
-            print("Could not fetch current premium. Skipping management.")
+            print(f"{underlying}: Could not fetch current premium. Skipping management.")
             return
 
         entry_price = float(active_position.get("buy_price", 0))  # or track entry price separately
 
-
         # Target 10%
         if entry_price > 0 and (current_premium - entry_price) / entry_price >= 0.10:
-            send_telegram_message(f"EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f}")
-            square_off_all_positions()
+            send_telegram_message(f"{underlying}: EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f}")
+            square_off_all_positions(underlying)
             return
 
         # Stop Loss based on ref levels. first we need to retrieve the candle reference data we stored during entry. This will have the big candle's high/low and the stop loss signal (above/below). Based on that we can decide if stop loss is hit.
-        candle_reference_data = ku.retrieve_candle_reference_data()
+        candle_reference_data = ku.retrieve_candle_reference_data(underlying)
         if candle_reference_data:
             stop_loss_signal = candle_reference_data.get("stop_loss_signal")
-            # compare with nifty's current spot price from the df. 
+            # compare with underlying's current spot price from the df. 
             current_candle = df.iloc[-1]  # Get the latest candle for current spot price
             current_spot = current_candle['close']
             big_candle_high = candle_reference_data.get("high")
             big_candle_low = candle_reference_data.get("low")
             # If the signal is 'below' and spot goes below the big candle's low, we exit. If the signal is 'above' and spot goes above the big candle's high, we exit.
             if stop_loss_signal == "below" and current_spot < big_candle_low:
-                send_telegram_message(f"EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
-                square_off_all_positions()
+                send_telegram_message(f"{underlying}: EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
+                square_off_all_positions(underlying)
                 return
             elif stop_loss_signal == "above" and current_spot > big_candle_high:
-                send_telegram_message(f"EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
-                square_off_all_positions()
+                send_telegram_message(f"{underlying}: EXIT (STOP LOSS) | P&L: {current_premium-entry_price:.2f}")
+                square_off_all_positions(underlying)
                 return
             
 
-
         # EOD Exit
         if current_time >= exit_cutoff:
-            send_telegram_message(f"EXIT (EOD) @ {current_time} | P&L: {current_premium-entry_price:.2f}")
-            square_off_all_positions()
+            send_telegram_message(f"{underlying}: EXIT (EOD) @ {current_time} | P&L: {current_premium-entry_price:.2f}")
+            square_off_all_positions(underlying)
             return
 
-        print(f"Holding the position. {active_position.get('tradingsymbol', 'Unknown')}: {current_premium:.2f}")
+        print(f"{underlying}: Holding the position. {active_position.get('tradingsymbol', 'Unknown')}: {current_premium:.2f}")
         return
 
     # ====================== 2. ENTRY LOGIC (No Position) ======================
     if current_time >= entry_cutoff:
-        print("After entry cutoff. No new entries.")
+        print(f"{underlying}: After entry cutoff. No new entries.")
         return
-
-
 
     # Fetch recent candles to detect big candle on the PREVIOUS completed candle
     if len(df) < 2:
-        print("Not enough candle data.")
+        print(f"{underlying}: Not enough candle data.")
         return
 
     # Last completed candle (previous one)
     prev_candle = df.iloc[-1]  
     body_size = abs(float(prev_candle['close']) - float(prev_candle['open']))
+    close_p = float(prev_candle['close'])
+    
+    # Calculate percentage-based thresholds
+    body_size_threshold_min = close_p * strategy_config.CANDLE_SIZE_MIN_PCT / 100
+    body_size_threshold_max = close_p * strategy_config.CANDLE_SIZE_MAX_PCT / 100
 
-    if BIG_CANDLE_MIN <= body_size <= BIG_CANDLE_MAX:
+    if body_size_threshold_min <= body_size <= body_size_threshold_max:
         is_green = float(prev_candle['close']) > float(prev_candle['open'])
         right = "CE" if is_green else "PE"
         
-        current_spot = get_nifty_quote()
+        current_spot = get_quote(underlying)
+        print(f"{underlying}: Current Spot: {current_spot}, Body Size: {body_size:.2f} (Green: {is_green})")
         if not current_spot:
-            print("Could not get spot price.")
+            print(f"{underlying}: Could not get spot price.")
             return
 
-        atm_strike = calculate_atm(current_spot)
+        atm_strike = calculate_atm(current_spot, underlying)
         payload = {
-            "underlying": "NIFTY",
+            "underlying": underlying,
             "transaction_type": kite_client.TRANSACTION_TYPE_BUY,
             "strike_price": atm_strike,
             "right": right,
@@ -264,10 +271,16 @@ def main_live():
                 "stop_loss_signal": "below" if is_green else "above",
                 "expireAt": (datetime.now() + timedelta(hours=7)).isoformat() # special field for auto deletion after 7 hours from now                
             }
-            ku.store_candle_reference_data(candle_data)
-            send_telegram_message(f"Big Candle detected!  {right.upper()} order placed. Spot: {current_spot}, ATM Strike: {atm_strike}")
+            ku.store_candle_reference_data(candle_data, underlying)
+            send_telegram_message(f"{underlying}: Big Candle detected! {right.upper()} order placed. Spot: {current_spot}, ATM Strike: {atm_strike}")
     else:
-        print(f"No big candle. Body size: {body_size:.2f} (thresholds: {BIG_CANDLE_MIN}-{BIG_CANDLE_MAX})")
+        print(f"{underlying}: No big candle. Body size: {body_size:.2f} (thresholds: {body_size_threshold_min:.2f}-{body_size_threshold_max:.2f})")
+
+
+def main_live():
+    """Main execution loop: run strategy for all configured underlyings"""
+    for underlying in strategy_config.get_all_underlyings():
+        execute_strategy(underlying)
 
 if __name__ == "__main__":
     main_live()
