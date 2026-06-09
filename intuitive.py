@@ -143,7 +143,7 @@ def get_strategy_positions(underlying: str):
 
 def square_off_all_positions(underlying: str):
     """Square off all strategy positions for an underlying"""
-    ku.square_off_strategy_positions()
+    ku.square_off_strategy_positions(underlying)
 
 def place_long_option_order(payload):
     """Place long call or put order"""

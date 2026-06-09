@@ -148,11 +148,11 @@ def place_order(payload):
         print(f"Error placing order: {e}")
         return None
 
-def square_off_strategy_positions():
+def square_off_strategy_positions(underlying):
     kite_client = get_kite_client()
     try:
         # Fetch all day and net positions
-        positions = get_strategy_positions()
+        positions = get_strategy_positions(underlying)
 
         for pos in positions:
             quantity = pos.get("quantity", 0)
