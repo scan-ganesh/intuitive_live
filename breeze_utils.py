@@ -2,7 +2,7 @@ import breeze_connect
 import time
 import os
 from dotenv import load_dotenv
-# Load .env into environment
+
 load_dotenv()
 
 # --- Configuration ---
@@ -10,37 +10,50 @@ app_key = os.environ.get("BREEZE_API_KEY")
 app_secret = os.environ.get("BREEZE_API_SECRET")
 api_session = os.environ.get("BREEZE_API_SESSION")
 
-# --- Global Variables ---
-breeze = breeze_connect.BreezeConnect(api_key=app_key)
-api_counter = 0
+# --- Global Cache ---
 breeze_session_cache = None
+cache_timestamp = 0
+CACHE_TTL_SECONDS = 7 * 3600 # 7 hours
 
-# --- Helper Functions ---
-def sleep(ms):
-    """Waits for a specified number of milliseconds."""
-    time.sleep(ms / 1000)
+api_counter = 0
 
 def generate_session():
-    """
-    Generates a new session or returns a cached one.
-    Handles session generation and caching synchronously.
-    """
-    global api_counter
-    api_counter += 1
+    global breeze_session_cache, cache_timestamp, api_counter
     
-    # API call limit logic (98 calls per minute)
-    if api_counter % 98 == 1 and api_counter > 98:
-        print("Sleeping for a minute...")
-        sleep(62000)  # Sleep
-        api_counter = 0  # Reset counter after sleep
+    current_time = time.time()
+    api_counter += 1
 
-    global breeze_session_cache
-    if breeze_session_cache:
+    # Rate limiting
+    if api_counter % 98 == 1 and api_counter > 98:
+        print("Sleeping for a minute due to rate limit...")
+        time.sleep(62)
+        api_counter = 0
+
+    # === CACHE CHECK ===
+    if (breeze_session_cache is not None and 
+        (current_time - cache_timestamp < CACHE_TTL_SECONDS)):
+        print("✅ Using cached session")
         return breeze_session_cache
-    else:
+
+    print("🔄 Cache expired or empty. Generating new session...")
+
+    try:
+        breeze = breeze_connect.BreezeConnect(api_key=app_key)
+        print(f"Generating new session with API...{api_session}")
+        start_time = time.time()
         breeze.generate_session(api_secret=app_secret, session_token=api_session)
+        end_time = time.time()
+        print(f"Session generated in {end_time - start_time:.2f} seconds")
+        # Update cache
         breeze_session_cache = breeze
+        cache_timestamp = current_time
+        
+        print("✅ New session generated and cached")
         return breeze
+        
+    except Exception as e:
+        print(f"❌ Error generating session: {e}")
+        raise
 
 # --- Main Function ---
 
@@ -48,7 +61,7 @@ def generate_session():
 def get_prices(payload, type='quote'):
 
     try:
-        generate_session()
+        breeze = generate_session()
         if type == 'quote':
             prices = breeze.get_quotes(**payload)
         elif type == 'historical':
@@ -70,7 +83,7 @@ def get_portfolio_positions():
     """
     Fetches current portfolio positions.
     """
-    generate_session()
+    breeze = generate_session()
     positions = breeze.get_portfolio_positions()
     if positions is None:
         print("Error fetching portfolio positions.")
@@ -83,7 +96,7 @@ def place_order(payload):
     Places an order with the given payload.
     """
     try:
-        generate_session()
+        breeze = generate_session()
         payload['validity'] = 'day'
         order_response = breeze.place_order(**payload)
     except Exception as err:
@@ -100,7 +113,7 @@ def square_off(payload):
     Squares off an existing position with the given payload.
     """
     try:
-        generate_session()
+        breeze = generate_session()
         square_off_response = breeze.square_off(**payload)
         print(square_off_response)
     except Exception as err:
@@ -118,7 +131,7 @@ def get_margin(exchange_code='NFO'):
     Fetches margin details for the specified exchange.
     """
     try:
-        generate_session()
+        breeze = generate_session()
         margin_response = breeze.get_margin(exchange_code=exchange_code)
     except Exception as err:
         print("Error fetching margin for exchange:", exchange_code)

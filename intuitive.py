@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 import os
 import dotenv
 import requests
+from fastapi import FastAPI, BackgroundTasks, status
+import uvicorn
 
 dotenv.load_dotenv()
 
@@ -277,10 +279,42 @@ def execute_strategy(underlying: str):
         print(f"{underlying}: No big candle. Body size: {body_size:.2f} (thresholds: {body_size_threshold_min:.2f}-{body_size_threshold_max:.2f})")
 
 
-def main_live():
-    """Main execution loop: run strategy for all configured underlyings"""
-    for underlying in strategy_config.get_all_underlyings():
-        execute_strategy(underlying)
+
+
+# Import your existing configuration and core execution logic
+# (Assuming strategy_config and execute_strategy are imported/defined above)
+
+app = FastAPI(
+    title="Nifty Straddle Execution Engine",
+    description="SEBI-compliant Cloud Run Service for Options Trading"
+)
+
+def run_strategy_pipeline():
+    """Background task to execute the core trading loop"""
+    print("⚡ Starting live trading strategy execution...")
+    try:
+        for underlying in strategy_config.get_all_underlyings():
+            print(f"📊 Processing underlying: {underlying}")
+            execute_strategy(underlying)
+        print("✅ Strategy execution loop completed successfully.")
+    except Exception as e:
+        print(f"❌ Error during strategy execution: {str(e)}")
+
+@app.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
+def trigger_trading_strategy(background_tasks: BackgroundTasks):
+    """
+    Endpoint triggered by Cloud Scheduler or local curl.
+    Spins off the trading loop as a background thread to prevent HTTP timeouts.
+    """
+    background_tasks.add_task(run_strategy_pipeline)
+    return {"status": "execution_triggered", "message": "Strategy running in background."}
+
+@app.get("/healthz", status_code=status.HTTP_200_OK)
+def health_check():
+    """Liveness probe required by Cloud Run to ensure container is healthy"""
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
-    main_live()
+    port = int(os.environ.get("PORT", 8080))
+    # Adding ws="none" forces uvicorn to skip checking for the broken websockets library
+    uvicorn.run("intuitive:app", host="0.0.0.0", port=port, workers=1, ws="none")

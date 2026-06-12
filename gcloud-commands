@@ -1,3 +1,62 @@
+# one command going forward
+gcloud run deploy nifty-straddle-service --source .
+
+# Build the container before deploying the service
+gcloud builds submit --tag asia-south1-docker.pkg.dev/icewater/trading-repo/nifty-straddle-image:latest .
+
+# Deploy it in the service
+gcloud run deploy nifty-straddle-service \
+    --image=asia-south1-docker.pkg.dev/icewater/trading-repo/nifty-straddle-image \
+    --region=asia-south1 \
+    --network=trading-vpc-network \
+    --subnet=trading-subnet-mumbai \
+    --vpc-egress=all-traffic \
+    --no-allow-unauthenticated \
+    --set-secrets=BREEZE_API_KEY=BREEZE_APP_KEY:latest \
+    --set-secrets=BREEZE_API_SECRET=BREEZE_APP_SECRET:latest \
+    --set-secrets=BREEZE_API_SESSION=BREEZE_API_SESSION:latest \
+    --set-secrets=TELEGRAM_URL=TELEGRAM_URL:latest \
+    --set-secrets=TELEGRAM_CHAT_ID=TELEGRAM_CHAT_ID:latest \
+    --set-secrets=TELEGRAM_FROM=TELEGRAM_FROM:latest \
+    --set-secrets=TELEGRAM_TO=TELEGRAM_TO:latest \
+    --set-secrets=KITE_API_KEY=KITE_API_KEY:latest \
+    --set-env-vars="PYTHONUNBUFFERED=1"
+
+curl -X POST "https://nifty-straddle-service-795383211266.asia-south1.run.app/trigger" \
+-H "Authorization: bearer $(gcloud auth print-identity-token)"
+
+gcloud run services update nifty-straddle-service \
+    --set-secrets=KITE_API_KEY=KITE_API_KEY:latest \
+    --region=asia-south1 
+
+# one time repo creation command
+gcloud artifacts repositories create trading-repo \
+    --repository-format=docker \
+    --location=asia-south1 \
+    --description="Docker repo for trading algorithms"
+
+gcloud projects add-iam-policy-binding 795383211266 \
+    --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer"
+
+gcloud compute networks subnets update trading-subnet-mumbai \
+    --region=asia-south1 \
+    --enable-private-google-access
+
+gcloud projects add-iam-policy-binding 795383211266 \
+    --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+    --role="roles/datastore.user"
+
+gcloud artifacts repositories add-iam-policy-binding trading-repo \
+    --location=asia-south1 \
+    --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer"
+
+gcloud artifacts repositories add-iam-policy-binding trading-repo \
+    --location=asia-south1 \
+    --member="serviceAccount:795383211266@cloudbuild.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer"
+
 1. gcloud builds submit --tag gcr.io/icewater/nifty-job
 2. gcloud run jobs execute nifty-straddle-job
 
@@ -37,3 +96,5 @@ gcloud secrets add-iam-policy-binding BREEZE_API_SESSION \
   --member="serviceAccount:795383211266-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
+# scheduling the service for scale up/down
+https://run.googleapis.com/v2/projects/icewater/locations/asia-south1/services/nifty-straddle-service?updateMask=template.scaling

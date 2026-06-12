@@ -3,6 +3,7 @@ import datetime
 from google.cloud import firestore
 from dotenv import load_dotenv
 import pandas as pd
+import time
 import os
 
 load_dotenv()
@@ -10,10 +11,13 @@ load_dotenv()
 syminfo_cache = {}
 
 customer_cache = None
+cache_timestamp = 0  # Stores the epoch time when the cache was created
+CACHE_TTL_SECONDS =  3600  # Set expiry time (e.g., 1 hour = 3600 seconds)
 
 def get_customer_data():
-    global customer_cache
-    if customer_cache is not None:
+    global customer_cache, cache_timestamp
+    current_time = time.time()
+    if customer_cache is not None and (current_time - cache_timestamp < CACHE_TTL_SECONDS):
         return customer_cache
 
     db = firestore.Client()
@@ -26,6 +30,7 @@ def get_customer_data():
         data = doc_snapshot.to_dict()
 
     customer_cache = data
+    cache_timestamp = current_time
     return data
 
 def store_candle_reference_data(candle_data, underlying: str = "NIFTY"):

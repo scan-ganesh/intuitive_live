@@ -7,11 +7,14 @@ requires-python = ">=3.11"
 dependencies = [
     "breeze-connect>=1.0.69",
     "dotenv>=0.9.9",
+    "fastapi>=0.136.3",
     "google-cloud-firestore>=2.27.0",
     "google-cloud-secret-manager==2.*",
     "kiteconnect>=5.2.0",
     "neo-api-client",
     "python-dotenv>=1.0.0",
+    "uvicorn>=0.28.0",
+    "websockets>=8.1",
 ]
 
 [tool.uv.sources]
