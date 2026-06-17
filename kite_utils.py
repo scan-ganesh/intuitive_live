@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 import pandas as pd
 import time
 import os
+from utils.storage_utils import _get_underlying_reference_data, get_next_expiry_date_v2
 
 load_dotenv()
 # Cache for symbol information
-syminfo_cache = {}
+
 
 customer_cache = None
 cache_timestamp = 0  # Stores the epoch time when the cache was created
@@ -121,7 +122,7 @@ def format_zerodha_weekly_expiry(e_date: datetime) -> str:
 
 def calculate_trading_symbol(underlying, strike, right):
 
-    expiry_date_v2 = get_next_expiry_date_v2(datetime.date.today().strftime("%Y-%m-%d"), underlying)
+    expiry_date_v2, _ = get_next_expiry_date_v2(datetime.date.today().strftime("%Y-%m-%d"), underlying)
     expiry_dt = format_zerodha_weekly_expiry(pd.to_datetime(expiry_date_v2))
 
     print(f"Calculated expiry date for {underlying} is {expiry_date_v2} and formatted expiry is {expiry_dt}")
@@ -192,33 +193,6 @@ def square_off_strategy_positions(underlying):
         print(f"Error executing square off: {e}")
 
 
-def _get_underlying_reference_data(underlying):
-    """Helper: Fetch and cache reference data for an underlying (lot_size, exchange, options expiries)"""
-    if underlying in syminfo_cache:
-        print(f"Using cached reference data for {underlying}")
-        return syminfo_cache[underlying]
-    
-    db = firestore.Client()
-    collection_ref = db.collection('references/COMMON/EXPIRYDATES')
-    doc_ref = collection_ref.document(underlying)
-    doc_snapshot = doc_ref.get()
-    
-    if not doc_snapshot.exists:
-        print(f"No expiry data found in Firestore for underlying: {underlying}")
-        return None
-
-    data = doc_snapshot.to_dict()
-    
-    cached_data = {
-        'lot_size': data.get('lot_size', 0),
-        'exchange': data.get('exchange', ''),
-        'options': sorted(list(data.get('options', [])))
-    }
-    
-    syminfo_cache[underlying] = cached_data
-    return cached_data
-
-
 def get_lot_size(underlying):
     """Get lot size for the underlying"""
     ref_data = _get_underlying_reference_data(underlying)
@@ -229,24 +203,6 @@ def get_exchange(underlying):
     """Get exchange for the underlying"""
     ref_data = _get_underlying_reference_data(underlying)
     return ref_data['exchange'] if ref_data else None
-
-
-def get_next_expiry_date_v2(date, underlying):
-    """Get next expiry date after the given date for the underlying"""
-    ref_data = _get_underlying_reference_data(underlying)
-    if not ref_data:
-        return None
-    
-    all_expiries = ref_data['options']
-    date_dt = pd.to_datetime(date)
-    
-    for expiry_str in all_expiries:
-        if pd.to_datetime(expiry_str) > date_dt:
-            return expiry_str
-    
-    return None
-
-
 
 if __name__ == "__main__":
     print(calculate_trading_symbol("NIFTY", 23500, "CE"))

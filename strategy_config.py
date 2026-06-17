@@ -18,6 +18,7 @@ UNDERLYINGS = {
         "atm_rounding_factor": 50,  # ATM strike rounding
         "entry_cutoff": time(15, 0),  # After this time, no new entries
         "exit_cutoff": time(15, 15),  # EOD exit time
+        "neo_exchange_segment": "nse_fo",  # Specific segment code for Neo API
     },
     "SENSEX": {
         "stock_code": "BSESEN",
@@ -26,6 +27,7 @@ UNDERLYINGS = {
         "atm_rounding_factor": 100,  # ATM strike rounding (100 for SENSEX)
         "entry_cutoff": time(15, 0),  # After this time, no new entries
         "exit_cutoff": time(15, 15),
+        "neo_exchange_segment": "bse_fo",  # Specific segment code for Neo API
     },
 }
 

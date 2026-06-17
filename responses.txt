@@ -1,0 +1,8 @@
+positions
+
+{'stat': 'ok', 'stCode': 200, 'data': [{'actId': 'V1ZWD', 'brdLtQty': 65, 'cfBuyAmt': '0.00', 'cfSellAmt': '0.00', 'cfBuyQty': '0', 'cfSellQty': '0', 'exSeg': 'nse_fo', 'buyAmt': '6669.00', 'sellAmt': '0.00', 'flBuyQty': '65', 'flSellQty': '0', 'prod': 'NRML', 'series': 'XX', 'tok': '50611', 'trdSym': 'NIFTY2661623900CE', 'optTp': 'CE', 'stkPrc': '23900.00', 'type': 'OPTIDX', 'sym': 'NIFTY', 'sqrFlg': 'Y', 'posFlg': 'true', 'lotSz': '65', 'multiplier': '1', 'precision': '2', 'prcNum': '1', 'prcDen': '1', 'hsUpTm': '2026/06/15 12:17:29', 'expDt': '16 Jun, 2026', 'exp': '1781568000', 'genNum': '1', 'genDen': '1', 'dscQty': '', 'upldPrc': '0.00', 'updRecvTm': 1781506049470469373}]}
+
+NIFTY2661623900CE
+NIFTY2661623900CE   
+
+order_id = client.place_order ( product="NRML", exchange_segment="nse_fo", order_type="MKT",trading_symbol="NIFTY2661623900CE",validity="DAY", price="", transaction_type="B", quantity="65", market_protection="1")

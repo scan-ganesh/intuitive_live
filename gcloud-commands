@@ -98,3 +98,6 @@ gcloud secrets add-iam-policy-binding BREEZE_API_SESSION \
 
 # scheduling the service for scale up/down
 https://run.googleapis.com/v2/projects/icewater/locations/asia-south1/services/nifty-straddle-service?updateMask=template.scaling
+
+ICICIDirect setup key
+IJHTOWLJKBLEQYLMORIE44KEKI

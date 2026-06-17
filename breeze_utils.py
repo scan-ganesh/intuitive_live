@@ -1,4 +1,4 @@
-import breeze_connect
+from breeze_connect import BreezeConnect
 import time
 import os
 from dotenv import load_dotenv
@@ -38,8 +38,7 @@ def generate_session():
     print("🔄 Cache expired or empty. Generating new session...")
 
     try:
-        breeze = breeze_connect.BreezeConnect(api_key=app_key)
-        print(f"Generating new session with API...{api_session}")
+        breeze = BreezeConnect(api_key=app_key)
         start_time = time.time()
         breeze.generate_session(api_secret=app_secret, session_token=api_session)
         end_time = time.time()
