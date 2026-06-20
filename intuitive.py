@@ -75,7 +75,6 @@ def get_quote(underlying: str):
     print(f"Fetching current quote for {underlying} with payload: {payload}")
     try:
         data = bu.get_prices(payload, type='quote')
-        print(f"Quote response for {underlying}: {data}")
         if data and len(data) > 0:
             # filter based on the exchange code
             return [filtered for filtered in data if filtered.get("exchange_code") == cfg["exchange_code"]][0].get("ltp")
@@ -166,7 +165,7 @@ def execute_strategy(underlying: str, broker: BaseBroker):
 
         # Target 10%
         if entry_price > 0 and (current_premium - entry_price) / entry_price >= 0.10:
-            send_telegram_message(f"{underlying}: EXIT (TARGET 10%) | P&L: {current_premium-entry_price:.2f}")
+            send_telegram_message(f"{underlying}: EXIT (TARGET) | Profit: {int(current_premium-entry_price)}")
             broker.square_off_all_positions(underlying)
             return
 
@@ -177,14 +176,14 @@ def execute_strategy(underlying: str, broker: BaseBroker):
             stop_loss_signal = candle_reference_data.get("stop_loss_signal")
             current_spot = df.iloc[-1]['close']
             if (stop_loss_signal == "below" and current_spot < candle_reference_data.get("low")) or (stop_loss_signal == "above" and current_spot > candle_reference_data.get("high")):
-                send_telegram_message(f"{underlying}: EXIT (STOP LOSS)")
+                send_telegram_message(f"{underlying}: EXIT (STOP LOSS)| Loss: {int(current_premium-entry_price)}")
                 broker.square_off_all_positions(underlying)
                 return
             # ... and so on
 
         # EOD Exit
         if current_time >= exit_cutoff:
-            send_telegram_message(f"{underlying}: EXIT (EOD) @ {current_time}")
+            send_telegram_message(f"{underlying}: EXIT (EOD)| P&L: {int(current_premium-entry_price)}")
             broker.square_off_all_positions(underlying)
             return
 
@@ -235,7 +234,7 @@ def execute_strategy(underlying: str, broker: BaseBroker):
                 "expireAt": (datetime.now() + timedelta(hours=7)).isoformat()                
             }
             ku.store_candle_reference_data(candle_data, underlying)
-            send_telegram_message(f"{underlying}: Order Placed successfully via broker abstraction layer.")
+            send_telegram_message(f"{underlying}: {right} order @ {atm_strike} placed successfully.")
 
 
 # Import your existing configuration and core execution logic

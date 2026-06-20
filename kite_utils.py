@@ -1,5 +1,5 @@
 import datetime
-
+from datetime import timedelta
 from google.cloud import firestore
 from dotenv import load_dotenv
 import pandas as pd
@@ -102,20 +102,35 @@ def get_strategy_positions(underlying_symbol="NIFTY"):
     
     return filtered_positions
 
+
 def format_zerodha_weekly_expiry(e_date: datetime) -> str:
-    # Get 2-digit year (e.g., '26') and 2-digit day (e.g., '15')
+    """
+    Format expiry date according to Zerodha/NSE weekly & monthly option symbol convention.
+    
+    - Weekly expiry: yyMdd  (e.g., 26O15, 26318)
+    - Monthly expiry: yyMMM (e.g., 26MAR)
+    """
+    # Check if this is the last expiry of the month (monthly expiry)
+    compare_date = e_date + timedelta(days=8)
+    
+    if e_date.month != compare_date.month:
+        # Monthly expiry → yyMMM (e.g., 26MAR)
+        return e_date.strftime('%y%b').upper()
+    
+    # Weekly expiry
     yy = e_date.strftime('%y')
     dd = e_date.strftime('%d')
     
-    # JavaScript getMonth() >= 9 covers October (10), November (11), December (12)
-    if e_date.month >= 10:
-        # Map 2-digit months to Zerodha's weekly codes (O, N, D)
+    month = e_date.month  # 1-based in Python (1=Jan, ..., 12=Dec)
+    
+    if month >= 10:
+        # October, November, December
         month_map = {10: 'O', 11: 'N', 12: 'D'}
-        m = month_map[e_date.month]
+        m = month_map[month]
     else:
-        # January to September remain single digits (1 to 9)
-        m = str(e_date.month)
-        
+        # January to September → single digit
+        m = str(month)
+    
     return f"{yy}{m}{dd}"
 
 # method that calculates the trading symbol for the given underlying, strike, right and expiry. Formula for the same will be Weekly- Index/Stock Name +Year of Expiry(numerical) +Month of expiry(numerical) + Day of expiry(numerical) + Strike and Option type(or FUT for futures) Regex- (?:(.*?)(\d{2}[A-Za-z0-9_]{1}\d{3})(.*)){1,1}. Expiry date will be a string yyyy-mm-dd. While formatting the date use yyMdd for the months which are in single digits and yyMMMMMdd for two digit months, Exanple 26523 for 23rd of May 2026. 26OCT23 for 23rd of October 2026. 
@@ -152,6 +167,7 @@ def place_order(payload):
         return order_id
     except Exception as e:
         print(f"Error placing order: {e}")
+        print("The payload was:", payload)
         return None
 
 def square_off_strategy_positions(underlying):
