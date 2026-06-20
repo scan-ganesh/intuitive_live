@@ -1,33 +1,47 @@
-# Use the official optimized Python slim environment
-FROM python:3.14-slim
-
-# Install system-level dependencies required for building wheels and network auth
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set standard working boundary inside the container
+# === Builder Stage ===
+FROM python:3.12-slim-bookworm AS builder
 WORKDIR /app
 
-# Ensure logs flow directly to Google Cloud Logging without buffering delay
-ENV PYTHONUNBUFFERED=1
+# Install build dependencies required for compiling some Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package requirements separately to optimize Docker layer caching
+# Install uv (fastest way)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# Set UV environment variables
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+# Create a virtual environment to house all dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies using the cache mount
 COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r requirements.txt
 
-#COPY neo_api_client /app/neo_api_client
+# === Runtime Stage ===
+FROM python:3.12-slim-bookworm
+WORKDIR /app
 
-# Install production dependencies
-RUN pip install --no-cache-dir -U pip && \
-    pip install --no-cache-dir -r requirements.txt 
-# ./neo_api_client
+# Copy the virtual environment from the builder
+COPY --from=builder /opt/venv /opt/venv
 
-# Copy all project strategy assets and modular files
+# Ensure the runtime uses the virtual environment
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Copy your application code
 COPY . .
 
-# Expose port 8080 documentation-wise
+# Cloud Run listens on 8080 by default
 EXPOSE 8080
 
-# Ensure it uses intuitive:app instead of main:app
+# Using uvicorn from the virtual environment
 CMD ["uvicorn", "intuitive:app", "--host", "0.0.0.0", "--port", "8080"]

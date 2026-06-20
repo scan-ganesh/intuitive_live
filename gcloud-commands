@@ -1,5 +1,10 @@
-# one command going forward
-gcloud run deploy nifty-straddle-service --source .
+
+# Run both the commands every time
+# This command has everything from the cloudbuild.yaml file, so you can skip that file and just run this command
+gcloud builds submit . 
+
+gcloud run services replace cloudrun.yaml --region asia-south1
+
 
 # Build the container before deploying the service
 gcloud builds submit --tag asia-south1-docker.pkg.dev/icewater/trading-repo/nifty-straddle-image:latest .

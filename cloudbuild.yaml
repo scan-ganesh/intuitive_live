@@ -1,0 +1,12 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  env:
+    - 'DOCKER_BUILDKIT=1'
+  args: [
+    'build', 
+    '--tag', 'asia-south1-docker.pkg.dev/icewater/cloud-run-source-deploy/nifty-straddle-service',
+    '--cache-from', 'asia-south1-docker.pkg.dev/icewater/cloud-run-source-deploy/nifty-straddle-service',
+    '.'
+  ]
+images:
+- 'asia-south1-docker.pkg.dev/icewater/cloud-run-source-deploy/nifty-straddle-service'
