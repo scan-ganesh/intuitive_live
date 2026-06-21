@@ -11,3 +11,4 @@ logs/
 # Virtual environments
 .venv
 .env
+cloudrun.yaml
