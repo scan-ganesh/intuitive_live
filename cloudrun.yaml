@@ -1,0 +1,72 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: nifty-straddle-service
+  labels:
+    cloud.googleapis.com/location: asia-south1
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/maxScale: '1'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '1'
+        autoscaling.knative.dev/minScale: '0'
+        run.googleapis.com/cpu-throttling: 'true'
+        run.googleapis.com/startup-cpu-boost: 'true'
+        run.googleapis.com/network-interfaces: '[{"network":"trading-vpc-network","subnetwork":"trading-subnet-mumbai"}]'
+        run.googleapis.com/vpc-access-egress: all-traffic
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: 795383211266-compute@developer.gserviceaccount.com
+      containers:
+      - image: asia-south1-docker.pkg.dev/icewater/cloud-run-source-deploy/nifty-straddle-service
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        env:
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        - name: BREEZE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: BREEZE_APP_KEY
+              key: latest
+        - name: BREEZE_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: BREEZE_APP_SECRET
+              key: latest
+        - name: BREEZE_API_SESSION
+          valueFrom:
+            secretKeyRef:
+              name: BREEZE_API_SESSION
+              key: latest
+        - name: TELEGRAM_URL
+          value: https://api.telegram.org/bot
+        - name: TELEGRAM_CHAT_ID
+          value: '1001934410867'
+        - name: TELEGRAM_FROM
+          valueFrom:
+            secretKeyRef:
+              name: TELEGRAM_FROM
+              key: latest
+        - name: TELEGRAM_TO
+          value: '743205101'
+        - name: KITE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: KITE_API_KEY
+              key: latest
+        startupProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 240
+          timeoutSeconds: 240
+          failureThreshold: 1
