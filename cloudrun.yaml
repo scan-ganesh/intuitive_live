@@ -48,7 +48,7 @@ spec:
               name: BREEZE_API_SESSION
               key: latest
         - name: TELEGRAM_URL
-          value: https://api.telegram.org/bot
+          value: https://api.telegram.org/
         - name: TELEGRAM_CHAT_ID
           value: '1001934410867'
         - name: TELEGRAM_FROM
