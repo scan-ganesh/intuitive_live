@@ -1,4 +1,4 @@
-from breeze_connect import BreezeConnect
+from breeze_connect import breeze_connect as breeze
 import time
 import os
 from dotenv import load_dotenv
@@ -38,17 +38,19 @@ def generate_session():
     print("🔄 Cache expired or empty. Generating new session...")
 
     try:
-        breeze = BreezeConnect(api_key=app_key)
+        # a recent research shows that the BreezeConnect library tries to fetch huge master list during session generation, which takes a huge amount of time. We will override that method to return an empty list to avoid unnecessary API calls.
+        breeze.BreezeConnect.get_stock_script_list = lambda self: []
+        bc = breeze.BreezeConnect(api_key=app_key)
         start_time = time.time()
-        breeze.generate_session(api_secret=app_secret, session_token=api_session)
+        bc.generate_session(api_secret=app_secret, session_token=api_session)
         end_time = time.time()
         print(f"Session generated in {end_time - start_time:.2f} seconds")
         # Update cache
-        breeze_session_cache = breeze
+        breeze_session_cache = bc
         cache_timestamp = current_time
         
         print("✅ New session generated and cached")
-        return breeze
+        return bc
         
     except Exception as e:
         print(f"❌ Error generating session: {e}")
@@ -60,11 +62,11 @@ def generate_session():
 def get_prices(payload, type='quote'):
 
     try:
-        breeze = generate_session()
+        bc = generate_session()
         if type == 'quote':
-            prices = breeze.get_quotes(**payload)
+            prices = bc.get_quotes(**payload)
         elif type == 'historical':
-            prices = breeze.get_historical_data_v2(**payload)
+            prices = bc.get_historical_data_v2(**payload)
 
         else:
             raise ValueError("Invalid type specified. Use 'quote' or 'historical'.")
@@ -82,8 +84,8 @@ def get_portfolio_positions():
     """
     Fetches current portfolio positions.
     """
-    breeze = generate_session()
-    positions = breeze.get_portfolio_positions()
+    bc = generate_session()
+    positions = bc.get_portfolio_positions()
     if positions is None:
         print("Error fetching portfolio positions.")
         return None
@@ -95,9 +97,9 @@ def place_order(payload):
     Places an order with the given payload.
     """
     try:
-        breeze = generate_session()
+        bc = generate_session()
         payload['validity'] = 'day'
-        order_response = breeze.place_order(**payload)
+        order_response = bc.place_order(**payload)
     except Exception as err:
         print("Error+++:", err)
         return None
@@ -112,8 +114,8 @@ def square_off(payload):
     Squares off an existing position with the given payload.
     """
     try:
-        breeze = generate_session()
-        square_off_response = breeze.square_off(**payload)
+        bc = generate_session()
+        square_off_response = bc.square_off(**payload)
         print(square_off_response)
     except Exception as err:
         print("Error squaring off position with payload:", payload)

@@ -1,6 +1,9 @@
 
 # Run both the commands every time
 # This command has everything from the cloudbuild.yaml file, so you can skip that file and just run this command
+gcloud run deploy nifty-straddle-service --source . --region asia-south1
+
+
 gcloud builds submit . && gcloud run services replace cloudrun.yaml --region asia-south1
 
 
