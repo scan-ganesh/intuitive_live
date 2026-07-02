@@ -218,7 +218,7 @@ def execute_strategy(underlying: str, broker: BaseBroker):
             underlying=underlying,
             strike_price=atm_strike,
             right=right,
-            quantity=1
+            quantity=2
         )
 
         if success:
