@@ -15,7 +15,7 @@ UNDERLYINGS = {
         "stock_code": "NIFTY",
         "exchange_code": "NSE",
         "product_type": "cash",
-        "atm_rounding_factor": 50,  # ATM strike rounding
+        "atm_rounding_factor": 100,  # ATM strike rounding => though the actual ATM strike is 50, we round to nearest 100 for strategy purposes
         "entry_cutoff": time(15, 0),  # After this time, no new entries
         "exit_cutoff": time(15, 15),  # EOD exit time
         "neo_exchange_segment": "nse_fo",  # Specific segment code for Neo API
