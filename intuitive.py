@@ -213,10 +213,16 @@ def execute_strategy(underlying: str, broker: BaseBroker):
 
         atm_strike = calculate_atm(current_spot, underlying)
 
+        # Lets introduce ITM instead of ATM. We need to add or subtract 100 to the atm_strike based on the candle color
+        if is_green:
+            itm_strike = atm_strike + 100
+        else:
+            itm_strike = atm_strike - 100
+
         # Execute using abstraction boundaries without passing broker constants
         success = broker.place_long_option_order(
             underlying=underlying,
-            strike_price=atm_strike,
+            strike_price=itm_strike,
             right=right,
             quantity=2
         )
@@ -234,7 +240,7 @@ def execute_strategy(underlying: str, broker: BaseBroker):
                 "expireAt": (datetime.now() + timedelta(hours=7)).isoformat()                
             }
             ku.store_candle_reference_data(candle_data, underlying)
-            send_telegram_message(f"{underlying}: {right} order @ {atm_strike} placed successfully.")
+            send_telegram_message(f"{underlying}: {right} order @ {itm_strike} placed successfully.")
 
 
 # Import your existing configuration and core execution logic
