@@ -215,9 +215,9 @@ def execute_strategy(underlying: str, broker: BaseBroker):
 
         # Lets introduce ITM instead of ATM. We need to add or subtract 100 to the atm_strike based on the candle color
         if is_green:
-            itm_strike = atm_strike + 100
-        else:
             itm_strike = atm_strike - 100
+        else:
+            itm_strike = atm_strike + 100
 
         # Execute using abstraction boundaries without passing broker constants
         success = broker.place_long_option_order(
