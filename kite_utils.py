@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import pandas as pd
 import time
 import os
+import strategy_config 
 from utils.storage_utils import _get_underlying_reference_data, get_next_expiry_date_v2
 
 load_dotenv()
@@ -214,6 +215,28 @@ def get_lot_size(underlying):
     ref_data = _get_underlying_reference_data(underlying)
     return ref_data['lot_size'] if ref_data else 0
 
+def _available_funds() -> float:
+    """Fetches available funds from Zerodha account."""
+    client = get_kite_client()
+    if not client:
+        print("Error: Kite client uninitialized. Cannot fetch funds.")
+        return 0.0
+    return client.margins(segment="equity").get("available", 0.0).get('cash', 0.0)
+
+def revise_quantity_to_trade() -> int:
+    """Returns the quantity to trade for the strategy."""
+    # two indices and each costs 25K per lot. So, 50K for two indices per lot
+    # we need to dynamically calculate the quantity based on available funds and take the floor value
+    available_funds = _available_funds()
+
+    #reserve 50K for non-strategy trades and other contingencies. So, we will only use the remaining funds for strategy trades.
+    available_funds -= 50000
+    lot_cost = 50000  # Cost for two indices per lot
+    quantity = int(available_funds // lot_cost)
+
+    strategy_config.revise_quantity_to_trade(quantity)
+
+    return quantity
 
 def get_exchange(underlying):
     """Get exchange for the underlying"""

@@ -62,6 +62,25 @@ def get_all_underlyings() -> List[str]:
     _ensure_cache_loaded()
     return list(UNDERLYINGS_cache.keys())
 
+def revise_quantity_to_trade(new_quantity: int) -> None:
+    """
+    Update the quantity to trade for all underlyings in Firestore.
+    
+    Args:
+        new_quantity (int): The new quantity to set for trading.
+    """
+    _ensure_cache_loaded()
+    
+    db = firestore.Client()
+    collection_ref = db.collection("references/COMMON/strategy_config")
+    
+    for underlying in UNDERLYINGS_cache.keys():
+        doc_ref = collection_ref.document(underlying)
+        doc_ref.update({"quantity": new_quantity})
+        # Update the cache as well
+        UNDERLYINGS_cache[underlying]["quantity"] = new_quantity
+    
+    print(f"Quantity to trade updated to {new_quantity} for all underlyings.")
 
 def get_config(underlying: str) -> Dict:
     """

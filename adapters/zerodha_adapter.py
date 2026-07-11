@@ -52,9 +52,4 @@ class ZerodhaAdapter(BaseBroker):
         """Executes the standard counter order square-off routine via kite_utils."""
         ku.square_off_strategy_positions(underlying)
 
-    def available_funds(self) -> float:
-        """Fetches available funds from Zerodha account."""
-        if not self.client:
-            print("Error: Kite client uninitialized. Cannot fetch funds.")
-            return 0.0
-        return self.client.margins()
+

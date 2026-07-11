@@ -272,6 +272,14 @@ def trigger_trading_strategy(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_strategy_pipeline)
     return {"status": "execution_triggered", "message": "Strategy running in background."}
 
+# store the quantity to trade in firestore for the strategy. This is useful for manual adjustments without redeploying the service.
+@app.post("/revise-quantity", status_code=status.HTTP_200_OK)
+def revise_quantity():
+    """Store the quantity to trade for a given underlying in Firestore."""
+    quantity = ku.revise_quantity_to_trade()
+    send_telegram_message(f"Lots for today's trading will be {quantity}.")
+    return {"status": "success", "message": f"Quantity for today ({quantity}) stored successfully."}
+
 @app.get("/neo-login", status_code=status.HTTP_200_OK)
 def neo_login():
     """Logs into Kotak Neo and refreshes the session token in Firestore. Useful for manual triggering or debugging."""
