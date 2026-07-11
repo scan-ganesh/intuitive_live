@@ -230,8 +230,13 @@ def revise_quantity_to_trade() -> int:
     available_funds = _available_funds()
 
     #reserve 50L for non-strategy trades and another 50K for SENSEX (2 lots). So, we will only use the remaining funds for strategy trades.
-    available_funds -= 100000
-    lot_cost = 25000  # Cost for NIFTY per lot. This can be made dynamic in future if needed.
+    reserved_for_non_strategy_trades = 50000  # 50K
+    
+    sensex_quantity = strategy_config.get_config("SENSEX")["quantity"]
+    available_funds -= reserved_for_non_strategy_trades
+    lot_cost = 25000  # Cost for index per lot. This can be made dynamic in future if needed.
+    reserved_for_sensex = sensex_quantity * lot_cost
+    available_funds -= reserved_for_sensex
     quantity = int(available_funds // lot_cost)
 
     strategy_config.revise_quantity_to_trade(quantity)
@@ -243,10 +248,3 @@ def get_exchange(underlying):
     ref_data = _get_underlying_reference_data(underlying)
     return ref_data['exchange'] if ref_data else None
 
-if __name__ == "__main__":
-    print(calculate_trading_symbol("NIFTY", 23500, "CE"))
-    print(calculate_trading_symbol("NIFTY", 23600, "CE"))
-    print(get_lot_size("SENSEX"))
-    print(get_exchange("NIFTY"))
-    print(get_exchange("SENSEX"))
-    
