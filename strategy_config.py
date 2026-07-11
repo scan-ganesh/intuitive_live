@@ -4,60 +4,94 @@ Defines settings for each underlying (NIFTY, SENSEX, etc.)
 """
 
 from datetime import time
+import time as cache_time
+from google.cloud import firestore
+from typing import Dict, List
 
-# Global candle size thresholds (percentage-based, applies to all underlyings)
-CANDLE_SIZE_MIN_PCT = 0.05  # Minimum body size as percentage of close price
-CANDLE_SIZE_MAX_PCT = 0.13  # Maximum body size as percentage of close price
+# ========================= CONFIG =========================
+CANDLE_SIZE_MIN_PCT = 0.05
+CANDLE_SIZE_MAX_PCT = 0.13
 
-# Define all supported underlyings and their configurations
-UNDERLYINGS = {
-    "NIFTY": {
-        "stock_code": "NIFTY",
-        "exchange_code": "NSE",
-        "product_type": "cash",
-        "atm_rounding_factor": 100,  # ATM strike rounding => though the actual ATM strike is 50, we round to nearest 100 for strategy purposes
-        "entry_cutoff": time(15, 0),  # After this time, no new entries
-        "exit_cutoff": time(15, 15),  # EOD exit time
-        "neo_exchange_segment": "nse_fo",  # Specific segment code for Neo API
-    },
-    "SENSEX": {
-        "stock_code": "BSESEN",
-        "exchange_code": "BSE",
-        "product_type": "cash",
-        "atm_rounding_factor": 100,  # ATM strike rounding (100 for SENSEX)
-        "entry_cutoff": time(15, 0),  # After this time, no new entries
-        "exit_cutoff": time(15, 15),
-        "neo_exchange_segment": "bse_fo",  # Specific segment code for Neo API
-    },
-}
+CACHE_TTL_SECONDS = 6 * 3600  # 6 hours
+
+# Global cache
+UNDERLYINGS_cache: Dict | None = None
+cache_timestamp: float = 0.0
+# ========================================================
+
+def _load_strategy_config_from_firestore() -> Dict:
+    """Internal function to load fresh config from Firestore."""
+    print("Loading strategy configuration from Firestore...")
+    db = firestore.Client()
+    collection_ref = db.collection("references/COMMON/strategy_config")
+    
+    config_docs = collection_ref.stream()
+    config_dict = {}
+    
+    for doc in config_docs:
+        config_dict[doc.id] = doc.to_dict()
+    
+    # Convert time strings to datetime.time objects
+    for settings in config_dict.values():
+        if "entry_cutoff" in settings and isinstance(settings["entry_cutoff"], str):
+            settings["entry_cutoff"] = time.fromisoformat(settings["entry_cutoff"])
+        if "exit_cutoff" in settings and isinstance(settings["exit_cutoff"], str):
+            settings["exit_cutoff"] = time.fromisoformat(settings["exit_cutoff"])
+    
+    return config_dict
 
 
-def get_config(underlying: str) -> dict:
+def _ensure_cache_loaded() -> None:
+    """Ensure cache is loaded and still valid. Loads only if necessary."""
+    global UNDERLYINGS_cache, cache_timestamp
+    
+    current_time = cache_time.time()
+    
+    # Load if cache is empty or expired
+    if (UNDERLYINGS_cache is None or 
+        (current_time - cache_timestamp >= CACHE_TTL_SECONDS)):
+        
+        UNDERLYINGS_cache = _load_strategy_config_from_firestore()
+        cache_timestamp = current_time
+
+
+# ===================== PUBLIC API =====================
+
+def get_all_underlyings() -> List[str]:
+    """Get list of all configured underlyings."""
+    _ensure_cache_loaded()
+    return list(UNDERLYINGS_cache.keys())
+
+
+def get_config(underlying: str) -> Dict:
     """
     Get configuration for a given underlying.
-    
-    Args:
-        underlying: Underlying symbol (e.g., "NIFTY", "SENSEX")
-    
-    Returns:
-        Configuration dictionary for the underlying
     
     Raises:
         ValueError: If underlying is not supported
     """
-    if underlying not in UNDERLYINGS:
-        raise ValueError(f"Underlying '{underlying}' not found in configuration. Supported: {list(UNDERLYINGS.keys())}")
+    _ensure_cache_loaded()
     
-    return UNDERLYINGS[underlying]
+    if underlying not in UNDERLYINGS_cache:
+        raise ValueError(
+            f"Underlying '{underlying}' not found. "
+            f"Supported: {list(UNDERLYINGS_cache.keys())}"
+        )
+    
+    return UNDERLYINGS_cache[underlying]
 
 
-def get_all_underlyings() -> list:
-    """Get list of all configured underlyings."""
-    return list(UNDERLYINGS.keys())
+def refresh_cache() -> None:
+    """Force refresh the cache (useful for manual reloads)."""
+    global UNDERLYINGS_cache, cache_timestamp
+    UNDERLYINGS_cache = _load_strategy_config_from_firestore()
+    cache_timestamp = cache_time.time()
+    print("Cache refreshed successfully.")
 
 
+# ===================== TESTING =====================
 if __name__ == "__main__":
-    # Test configuration
+    # This will load the cache only once (on first call)
     for underlying in get_all_underlyings():
         config = get_config(underlying)
         print(f"{underlying}: {config}")

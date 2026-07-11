@@ -224,7 +224,7 @@ def execute_strategy(underlying: str, broker: BaseBroker):
             underlying=underlying,
             strike_price=itm_strike,
             right=right,
-            quantity=2
+            quantity=cfg['quantity']
         )
 
         if success:
