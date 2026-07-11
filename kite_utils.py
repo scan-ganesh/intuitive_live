@@ -229,8 +229,8 @@ def revise_quantity_to_trade() -> int:
     # we need to dynamically calculate the quantity based on available funds and take the floor value
     available_funds = _available_funds()
 
-    #reserve 75K for non-strategy trades and SENSEX. So, we will only use the remaining funds for strategy trades.
-    available_funds -= 75000
+    #reserve 50L for non-strategy trades and another 50K for SENSEX (2 lots). So, we will only use the remaining funds for strategy trades.
+    available_funds -= 100000
     lot_cost = 25000  # Cost for NIFTY per lot. This can be made dynamic in future if needed.
     quantity = int(available_funds // lot_cost)
 

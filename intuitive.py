@@ -277,7 +277,10 @@ def trigger_trading_strategy(background_tasks: BackgroundTasks):
 def revise_quantity():
     """Store the quantity to trade for a given underlying in Firestore."""
     quantity = ku.revise_quantity_to_trade()
-    send_telegram_message(f"Lots for today's trading will be {quantity}.")
+    message = f"Lots for today's trading will be {quantity}."
+    if quantity < 0 :
+       message = f"Error: Quantity to trade is negative ({quantity}). Please check the available funds and strategy configuration."
+    send_telegram_message(message) 
     return {"status": "success", "message": f"Quantity for today ({quantity}) stored successfully."}
 
 @app.get("/neo-login", status_code=status.HTTP_200_OK)
