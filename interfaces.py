@@ -42,11 +42,3 @@ class BaseBroker(ABC):
         Find and gracefully close all active strategy positions for a given underlying.
         """
         pass
-
-    @abstractmethod
-    def quantity_to_trade(self) -> int:
-        """
-        Returns the quantity to trade for the strategy.
-        This can be a fixed value or derived from available funds and risk management rules.
-        """
-        pass
