@@ -239,6 +239,9 @@ def revise_quantity_to_trade() -> int:
     available_funds -= reserved_for_sensex
     quantity = int(available_funds // lot_cost)
 
+    if quantity < 1:
+        quantity = 1  # Ensure at least 1 lot is traded if funds are insufficient
+
     strategy_config.revise_quantity_to_trade(quantity)
 
     return quantity
